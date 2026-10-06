@@ -55,4 +55,19 @@ UserSchema.methods.getSignedJwtToken=function(){
 UserSchema.methods.matchPassword=async function (enteredPassword){
     return await bcrypt.compare(enteredPassword,this.password)
 }
+UserSchema.set('toJSON',{virtuals:true})
+UseSchema.set('toObject',{virtuals:true})
+
+UserSchema.virtual('products',{
+    ref:"Product",
+    localField:'_id',
+    foreignField:'user',
+    justOne:false
+})
+
+UserSchema.pre('deleteone',{document:true,query:false},async function(next){
+    console.log(`Products being removed for user ${this._id}`);
+    await this.model('Product').deleteMany({user:this._id})
+    next();
+})
 module.exports=mongoose.model('User',UserSchema);

@@ -3,45 +3,38 @@ const productModel = require('../models/Product');
 const asyncHandler = require('../middleware/asyncHandler'); // Utility to catch async errors automatically
 
 const getProducts = asyncHandler(async (req, res) => {
-    const page=parseInt(req.query.page) || 1;
-    const limit=parseInt(req.query.limit) || 10;
-    const skip=(page-1)*limit;
-    const sort=req.query.sort || '-createdAt';
-    const searchCondition=req.query.keyword?{
-        title:{
-            $regex:req.query.keyword,
-            $option:'i'
-        }
-    }:{};
-    let priceFilter={}
-    if(req.query.minPrice || req.query.maxPrice){
-        priceFilter.price={}
-        if(req.query.minPrice) priceFilter.price.$gte=Number(req.query.minPrice)
-            if(req.query.maxPrice) priceFilter.price.$lte=Number(req.query.maxPrice)
-    }
-  const products = await productModel.find().sort(sort).skip(skip).limit(limit);
-  const totalMatchingProducts=await productModel.countDocuments(searchCondition)
-  
+  // 1. Build features query with population attached
+  const features = new APIFeatures(
+    productModel.find().populate({
+      path: 'user', // Lowercase key matching productSchema field
+      select: 'name email'
+    }),
+    req.query
+  )
+    .search()
+    .filter()
+    .sort()
+    .paginate();
+
+  // 2. Execute query
+  const products = await features.query;
+  const totalCount = await productModel.countDocuments();
+
+  // 3. Send response
   res.status(200).json({
     success: true,
-    limit:limit,
-    skip:skip,
-    sortedBy:sort,
     count: products.length,
-    totalMatching:totalMatching,
+    totalProducts: totalCount,
     data: products
   });
 });
-
 // @desc    Create a product
 // @route   POST /api/products/add-products
 const createProduct = asyncHandler(async (req, res) => {
-  const { title, price } = req.body;
-
-  const newProduct = await productModel.create({
-    title,
-    price
-  });
+  req.body.user=req.user.id;
+  const newProduct = await productModel.create(
+    req.body
+  );
 
   res.status(201).json({
     success: true,
