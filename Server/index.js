@@ -1,22 +1,38 @@
-const express=require('express');
-const app=express();
-const port=3000;
-const productRoutes=require('./routes/ProductRoutes');
-
+const express = require('express');
+const app = express();
+const dotenv = require('dotenv');
+const port = 3000;
 app.use(express.json());
-app.use('/api/products',productRoutes);
+dotenv.config();
+const connectDB = require('./config/db');
+const productRoutes = require('./routes/ProductRoutes');
+const authRoutes=require('./routes/AuthRoutes')
 
-app.use((req,res,next,err)=>{
-    console.error(err.stack);
-    res.status(500).json({
-        success:false,
-        error:'Internal Server Error'
-    })
-})
-app.get('/',(req,res)=>{
-    res.send('Server is running!')
-})
+connectDB();
 
-app.listen(port,()=>{
-    console.log(`Server is running on http://localhost:${port}`);
+
+app.get('/', (req, res) => {
+  res.send('Server is running!');
+});
+
+app.use('/api/products', productRoutes);
+app.use('/api/auth',authRoutes)
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+
+  
+  if (err.name === 'CastError' && err.kind === 'ObjectId') {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid ID format'
+    });
+  }
+  res.status(err.statusCode || 500).json({
+    success: false,
+    error: err.message || 'Internal Server Error'
+  });
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
 });
