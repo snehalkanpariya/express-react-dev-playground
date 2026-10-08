@@ -1,82 +1,65 @@
-const User = require('../models/User');
-const asyncHandler = require('../middleware/asyncHandler');
-const sendTokenResponse = (user, statusCode, res) => {
-  const token = user.getSignedJwtToken();
+import User from '../models/User.js';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-  return res.status(statusCode).json({ 
-    success: true,
-    token,
-    user: {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role
+// REGISTER USER (To create our test account)
+export const registerUser = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists' });
     }
-  });
+
+    // Hash password before saving to DB
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({ name, email, password: hashedPassword });
+
+    res.status(201).json({ success: true, message: 'User registered successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server Error' });
+  }
 };
 
-// @desc    Register user
-// @route   POST /api/auth/register
-const registerUser = asyncHandler(async (req, res, next) => {
-  const { name, email, password, role } = req.body;
+// LOGIN USER
+export const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  const userExists = await User.findOne({ email });
-  if (userExists) {
-    return res.status(400).json({
-      success: false,
-      error: 'User with this email already exists'
+    // 1. Find user in MongoDB
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
+
+    // 2. Compare incoming plain password with stored bcrypt hash
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
+
+    // 3. Generate JWT Token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    // 4. Send token & user data back to React (Chunk 5)
+    res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server Error' });
   }
-
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role
-  });
-
-  sendTokenResponse(user, 201, res);
-});
-
-// @desc    Login user
-// @route   POST /api/auth/login
-const loginUser = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      error: 'Please provide email and password'
-    });
-  }
-
-  const user = await User.findOne({ email }).select('+password');
-  if (!user) {
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid credentials'
-    });
-  }
-
-  const isMatch = await user.matchPassword(password);
-  if (!isMatch) {
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid credentials'
-    });
-  }
-
-  sendTokenResponse(user, 200, res);
-});
-const getMe=asyncHandler(async(req,res,next)=>{
-    return res.status(200).json({
-        success:true,
-        user:req.user
-    })
-})
-
-module.exports = {
-  registerUser,
-  loginUser,
-  getMe
 };

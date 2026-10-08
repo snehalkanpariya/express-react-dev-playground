@@ -1,9 +1,9 @@
-const express=require("express");
-const router=express.Router();
-const { registerUser,loginUser,getMe}=require('../controller/AuthController');
-const {protect}=require("../middleware/AuthMiddleware")
+import express from 'express';
+import { registerUser, loginUser } from '../controller/authController.js';
 
-router.post('/register',registerUser);
-router.post('/login',loginUser)
-router.get('/getme',protect,getMe)
-module.exports=router;
+const router = express.Router();
+
+router.post('/register', registerUser);
+router.post('/login', loginUser);
+
+export default router;
