@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import API from '../API/axios';
+import API, { setAccessToken } from '../API/axios';
 
 const AuthContext = createContext();
 
@@ -7,31 +7,56 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session from localStorage when page reloads
+  // 1. PAGE REFRESH RESTORATION: 
+  // Since our access token lives in memory, it resets on refresh. 
+  // We call /auth/refresh immediately on mount. If the HttpOnly cookie is valid, 
+  // the backend hands back a fresh access token silently!
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('token');
+    const initializeAuth = async () => {
+      try {
+        const response = await API.post('/auth/refresh');
+        setAccessToken(response.data.accessToken);
 
-    if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+        // Restore user profile from localStorage if available
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (err) {
+        // Refresh token is missing or expired
+        setUser(null);
+        localStorage.removeItem('user');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
   }, []);
 
-  // Login function called by the Login page
+  // 2. LOGIN: Store access token in memory, user profile in localStorage
   const login = async (email, password) => {
     const response = await API.post('/auth/login', { email, password });
-    const { token, user } = response.data;
+    const { accessToken, user } = response.data;
 
-    localStorage.setItem('token', token);
+    // Save access token strictly in-memory (Secure from XSS)
+    setAccessToken(accessToken);
+
+    // Save non-sensitive user metadata for UI rendering
     localStorage.setItem('user', JSON.stringify(user));
     setUser(user);
 
     return response.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
+  // 3. LOGOUT: Clear backend cookie and client memory/state
+  const logout = async () => {
+    try {
+      await API.post('/auth/logout'); // Clears HttpOnly cookie on backend
+    } catch (err) {
+      console.error('Logout error', err);
+    }
+    setAccessToken(null);
     localStorage.removeItem('user');
     setUser(null);
   };

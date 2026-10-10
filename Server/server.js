@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
+import cookieParser from 'cookie-parser'
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ app.use(cors({
 
 // 2. Parse incoming JSON body into req.body
 app.use(express.json());
-
+app.use(cookieParser())
 // 3. Mount Routes (Matches http://localhost:3000/api/auth/...)
 app.use('/api/auth', authRoutes);
 

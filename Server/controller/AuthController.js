@@ -2,6 +2,17 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+const generateAccessToken = (userId) => {
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET || 'access_secret_123', {
+    expiresIn: '15m' // Short-lived access token
+  });
+};
+
+const generateRefreshToken = (userId) => {
+  return jwt.sign({ id: userId }, process.env.REFRESH_SECRET || 'refresh_secret_456', {
+    expiresIn: '7d' // Long-lived refresh token
+  });
+};
 // REGISTER USER (To create our test account)
 export const registerUser = async (req, res) => {
   try {
@@ -62,4 +73,28 @@ export const loginUser = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server Error' });
   }
+};
+
+export const refreshToken = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) return res.status(401).json({ message: 'No refresh token provided' });
+
+    // Verify Refresh Token
+    jwt.verify(refreshToken, process.env.REFRESH_SECRET || 'refresh_secret_456', (err, decoded) => {
+      if (err) return res.status(403).json({ message: 'Invalid or expired refresh token' });
+
+      // Generate fresh short-lived Access Token
+      const newAccessToken = generateAccessToken(decoded.id);
+      res.json({ accessToken: newAccessToken });
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+// LOGOUT CONTROLLER (Clears Cookie)
+export const logoutUser = async (req, res) => {
+  res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'lax' });
+  res.json({ message: 'Logged out successfully' });
 };
